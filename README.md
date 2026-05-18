@@ -2,11 +2,15 @@
 
 **Running explain.depesz.com on Kubernetes (locally, for free) with CloudNativePG**
 
-> Deploy PostgreSQL EXPLAIN visualiser to a self-healing local Kubernetes cluster using kind and the CloudNativePG operator. Learn production Postgres + K8s patterns with zero infrastructure cost. Includes dev/prod Kustomize overlays and failover testing.
+> Deploy PostgreSQL EXPLAIN visualiser to a self-healing local Kubernetes cluster using kind (Kubernetes In Docker) and the CloudNativePG operator. Learn production Postgres + K8s patterns with zero infrastructure cost. Includes dev/prod Kustomize overlays and failover testing.
+
+- https://kind.sigs.k8s.io/
+- https://cloudnative-pg.io/docs
+- https://www.depesz.com/2008/12/04/explaindepeszcom/
 
 A companion repository for the blog series:
 
-- **Part 1** (this post): Local Kubernetes with kind, CloudNativePG for self-healing stateful PostgreSQL, and a containerised deployment of [explain.depesz.com](https://gitlab.com/depesz/explain.depesz.com).
+- **Initial commit** (this post): Local Kubernetes with kind, CloudNativePG for self-healing stateful PostgreSQL, and a containerised deployment of [explain.depesz.com](https://gitlab.com/depesz/explain.depesz.com).
 - **TODO:** *(coming)*: Prometheus + Grafana monitoring and alerting on top of the same stack.
 
 ---
