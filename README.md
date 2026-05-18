@@ -2,6 +2,8 @@
 
 **Running explain.depesz.com on Kubernetes (locally, for free) with CloudNativePG**
 
+> Deploy PostgreSQL EXPLAIN visualiser to a self-healing local Kubernetes cluster using kind and the CloudNativePG operator. Learn production Postgres + K8s patterns with zero infrastructure cost. Includes dev/prod Kustomize overlays and failover testing.
+
 A companion repository for the blog series:
 
 - **Part 1** (this post): Local Kubernetes with kind, CloudNativePG for self-healing stateful PostgreSQL, and a containerised deployment of [explain.depesz.com](https://gitlab.com/depesz/explain.depesz.com).
@@ -117,8 +119,8 @@ cnpg-depesz-explain-local-lab/
 │   └── test-failover.sh         ← delete primary pod, watch CNPG recover
 ├── app/
 │   └── docker/
-│       ├── Dockerfile           ← containerises explain.depesz.com (Perl/Plack)
-│       ├── plack-app.psgi       ← PSGI entry-point wrapping the CGI app
+│       ├── Dockerfile           ← multi-stage build: installs Perl deps, runs explain.pl via Mojolicious
+│       ├── entrypoint.sh        ← writes explain.json from env vars, runs SQL patches on first start
 │       ├── .dockerignore
 │       └── src/                 ← populated by scripts/fetch-upstream.sh (git-ignored)
 │           └── explain.depesz.com/
@@ -137,12 +139,9 @@ cnpg-depesz-explain-local-lab/
 │   │   └── kustomization.yaml
 │   └── overlays/
 │       ├── dev/
-│       │   └── kustomization.yaml   ← 1 replica, NodePort, debug log level
+│       │   └── kustomization.yaml   ← 1 replica, NodePort, relaxed resource limits
 │       └── prod/
 │           └── kustomization.yaml   ← 2 replicas, ClusterIP, resource limits
-└── .github/
-    └── workflows/
-        └── lint.yaml            ← kustomize build lint on PR
 ```
 
 ---
@@ -196,18 +195,22 @@ CNPG creates two `Services` for your cluster automatically:
 | Read-Only | `pg-explain-ro.explain.svc` | Replicas — useful for reporting |
 | Any | `pg-explain-r.explain.svc` | Any alive instance |
 
-The app `Deployment` references `pg-explain-rw` via environment variables derived from the CNPG-generated `Secret`.
+The app `Deployment` connects to `pg-explain-rw` (hardcoded as `PG_HOST`) and reads credentials from the `pg-explain-app-secret` Kubernetes Secret.
 
 ### 4. The application container
 
-`app/docker/Dockerfile` builds explain.depesz.com from source:
+`app/docker/Dockerfile` is a two-stage build:
 
-```dockerfile
-FROM perl:5.38-slim
-# ... installs CPAN deps, clones the app, wires DATABASE_URL
-```
+1. **Builder stage** — installs system deps, builds pgFormatter from source, then runs `cpanm --installdeps` against the upstream `cpanfile`
+2. **Runtime stage** — copies only the compiled Perl modules and app source into a slim image; runs as a non-root user
 
-The app reads `DATABASE_URL` from an env var. We inject this from the Kubernetes `Secret` that CNPG creates (format: `postgresql://user:pass@host/db`).
+At startup `entrypoint.sh`:
+1. Writes `/app/explain.json` from Kubernetes Secret env vars (`PG_HOST`, `PG_PORT`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD`, `APP_SECRET`)
+2. Waits for Postgres to accept connections via `pg_isready`
+3. On first start, runs all SQL files in order (`create.sql` then `patch-001.sql` → `patch-016.sql`) to build the schema; skips this on subsequent restarts
+4. `exec`s the Mojolicious daemon: `explain.pl daemon -l http://0.0.0.0:3000`
+
+> **Note:** Mojolicious defaults to `development` mode, which causes it to load `explain.development.json` on top of `explain.json` and override the database config with upstream defaults. Set `MOJO_MODE=production` in your deployment to ensure only `explain.json` is used.
 
 ### 5. Deploying
 
