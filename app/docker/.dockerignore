@@ -1,0 +1,4 @@
+# Exclude git history from the Docker build context — keeps the image lean
+src/**/.git
+src/**/.gitignore
+src/**/node_modules

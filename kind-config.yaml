@@ -1,0 +1,41 @@
+# kind (Kubernettes in Docker) cluster configuration
+# Exposes port 8080 on your host so the app is reachable at http://localhost:8080
+# TODO: Port 9090 reserved (Prometheus)
+# TODO: Port 3000 reserved (Grafana)
+#
+# Three-node layout (1 control-plane + 2 workers) means CNPG can schedule
+# the primary and standby on different nodes, making failover behaviour
+# more realistic — a pod deletion genuinely tests cross-node recovery.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+name: explain-cluster
+
+nodes:
+  - role: control-plane
+    extraPortMappings:
+    # I'm using NodePorts to expose the app, Prometheus, and Grafana, so we can access them via localhost on the host machine. 
+    #Kind doesn't support load balancers by default.
+      # explain app (NodePort 30080)
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      # TODO:: Prometheus (NodePort 30090)
+      - containerPort: 30090
+        hostPort: 9090
+        protocol: TCP
+      # TODO:: Grafana (NodePort 30030)
+      - containerPort: 30030
+        hostPort: 3000
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+  # Two workers let the primary and standby land on separate nodes,
+  # so deleting a pod tests real cross-node failover rather than
+  # just a pod restart on the same node.
+  - role: worker
+  - role: worker

@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Prod overlay 
+# Intended for a real cluster (EKS, GKE, AKS, or a hardened bare-metal kind).
+# Changes from base:
+#   - App: 2 replicas, enforced resource limits
+#   - Service: ClusterIP (expose via Ingress controller)
+#   - Postgres: 3 instances (primary + 2 replicas)
+#   - Image: pull from registry (imagePullPolicy: Always)
+# 
+
+resources:
+  - ../../base
+
+namespace: explain
+
+labels:
+  - pairs:
+      environment: prod
+    includeSelectors: false
+
+patches:
+  # Deployment: add app replica, tighter resource limits 
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: explain-app
+        namespace: explain
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: explain-app
+                env:
+                  - name: APP_ENV
+                    value: "production"
+                resources:
+                  requests:
+                    cpu: "200m"
+                    memory: "256Mi"
+                  limits:
+                    cpu: "1000m"
+                    memory: "512Mi"
+
+  # Postgres: increase parameters and storage for production use
+  - patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: pg-explain
+        namespace: explain
+      spec:
+        instances: 2
+        storage:
+          size: 10Gi
+        postgresql:
+          parameters:
+            shared_buffers: "512MB"
+            max_connections: "200"
+            work_mem: "16MB"

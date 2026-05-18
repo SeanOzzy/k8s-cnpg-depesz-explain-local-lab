@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: explain-app
+  namespace: explain
+  labels:
+    app.kubernetes.io/name: explain-app
+    app.kubernetes.io/part-of: pg-explain-k8s
+spec:
+  selector:
+    app.kubernetes.io/name: explain-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  # Type is patched per overlay:
+  #   dev  → NodePort (30080) — directly reachable via kind's port mapping
+  #   prod → ClusterIP — expose via Ingress in a real cluster
+  type: ClusterIP

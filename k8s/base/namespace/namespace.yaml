@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: explain
+  labels:
+    app.kubernetes.io/part-of: pg-explain-k8s
+    # Label used by TODO: NetworkPolicy and PodMonitor selectors
+    monitoring: "enabled"

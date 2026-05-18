@@ -1,0 +1,86 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-explain
+  namespace: explain
+  labels:
+    app.kubernetes.io/name: pg-explain
+    app.kubernetes.io/part-of: pg-explain-k8s
+  annotations:
+    # Tells the operator to automatically reload when the app secret changes.
+    # Remove this in production and handle credential rotation explicitly.
+    cnpg.io/reload-after-secret-update: "true"
+spec:
+  # Instances 
+  # 2 instances: 1 primary + 1 hot standby.
+  # The standby streams WAL from the primary and can be promoted automatically
+  # if the primary pod fails or the node becomes unreachable.
+  instances: 2
+
+  # PostgreSQL configuration 
+  postgresql:
+    parameters:
+      # Sized for a kind cluster on a laptop. Adjust upward for real workloads.
+      shared_buffers: "128MB"
+      work_mem: "4MB"
+      maintenance_work_mem: "64MB"
+      max_connections: "100"
+      # Logging: useful for learning / debugging
+      log_min_duration_statement: "1000"  # log queries > 1s
+      log_checkpoints: "on"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "on"
+      # TODO: hook: enable pg_stat_statements for Grafana query analysis
+      # shared_preload_libraries: "pg_stat_statements"
+      # pg_stat_statements.track: "all"
+
+  # Bootstrap 
+  # initdb runs once on first cluster creation. Subsequent startups skip this.
+  bootstrap:
+    initdb:
+      database: explain
+      owner: explain_app
+      secret:
+        name: pg-explain-app-secret
+      # explain.depesz.com schema will be applied by the app's init container.
+      # Alternatively, specify postInitApplicationSQL here:
+      # postInitApplicationSQL:
+      #   - "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
+      postInitApplicationSQL:
+        - "ALTER ROLE explain_app LOGIN;"
+        - "GRANT ALL PRIVILEGES ON DATABASE explain TO explain_app;"
+
+  # Superuser credentials
+  # CNPG creates the 'postgres' superuser. We provide its password via a Secret.
+  # The operator will create a Secret named 'pg-explain-superuser' automatically
+  # if you omit this; supplying it gives us a predictable name for scripts.
+  superuserSecret:
+    name: pg-explain-superuser-secret
+
+  # Storage
+  # CNPG creates one PVC per instance. The data survives pod restarts.
+  # In production, set storageClass to your cloud provider's fast SSD class.
+  storage:
+    size: 1Gi
+    # storageClass: standard   # uncomment to pin to a specific StorageClass
+
+  # Monitoring 
+  # CNPG exposes Prometheus metrics on port 9187 of each instance pod.
+  # TODO: will add a PodMonitor to scrape this endpoint.
+  monitoring:
+    enablePodMonitor: false   # flip to true in TODO: overlay
+
+  # Scheduled backups (TODO) 
+  # Uncomment and configure to archive WAL + base backups to S3/GCS.
+  # backup:
+  #   barmanObjectStore:
+  #     destinationPath: s3://your-bucket/pg-explain/
+  #     s3Credentials:
+  #       accessKeyId:
+  #         name: s3-creds
+  #         key: ACCESS_KEY_ID
+  #       secretAccessKey:
+  #         name: s3-creds
+  #         key: SECRET_ACCESS_KEY
+  #   retentionPolicy: "7d"
